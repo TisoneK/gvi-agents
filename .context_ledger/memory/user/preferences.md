@@ -30,6 +30,7 @@ correction twice.
 
 - Feature-branch flow, never commit straight to `main`: branch → commit → push → PR → merge → delete the merged branch (approved pattern, 2026-11-26)
 - Carry that full delivery sequence **autonomously** once the work is done — don't stop to ask at each gate (push? PR? merge? delete?). Recognise the established sequence and run it through. (correction, 2026-11-26)
+- A cycle is complete only when the change is **proven not to break `main`**: pass the build/type-check gate locally and wait for CI to go green before merging; never merge or delete a branch on red/untested. See workflows/active.md "Definition of done". (correction, 2026-11-26)
 - Verify a change working in the real app (browser/live) before committing; show screenshots (approved pattern, 2026-11-26)
 
 ## Communication
