@@ -33,10 +33,42 @@ class AnthropicProvider implements LLMProvider {
   }
 }
 
-export const llm: LLMProvider | null =
-  config.llm.provider === "anthropic" && config.llm.apiKey
-    ? new AnthropicProvider(config.llm.apiKey, config.llm.model)
-    : null;
+// OpenAI-compatible provider: talks to any endpoint speaking the OpenAI
+// /chat/completions API — OpenAI, OpenRouter, Together, Groq, or a local
+// Ollama/vLLM/LM Studio server — by pointing at its base_url. Raw HTTP on
+// purpose: this is deliberately not the Anthropic SDK.
+class OpenAICompatProvider implements LLMProvider {
+  name = "openai-compat";
+  constructor(private key: string, private baseUrl: string, private model: string) {}
+  async complete({ system, prompt, maxTokens = 1024 }: { system?: string; prompt: string; maxTokens?: number }) {
+    const messages: Array<{ role: string; content: string }> = [];
+    if (system) messages.push({ role: "system", content: system });
+    messages.push({ role: "user", content: prompt });
+    const res = await fetch(`${this.baseUrl.replace(/\/$/, "")}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...(this.key ? { authorization: `Bearer ${this.key}` } : {}),
+      },
+      body: JSON.stringify({ model: this.model, messages, max_tokens: maxTokens, temperature: 0.4 }),
+    });
+    if (!res.ok) throw new Error(`openai-compat ${res.status}: ${await res.text().catch(() => "")}`);
+    const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    return data.choices?.[0]?.message?.content ?? "";
+  }
+}
+
+function makeLLM(): LLMProvider | null {
+  if (config.llm.provider === "anthropic" && config.llm.anthropicKey) {
+    return new AnthropicProvider(config.llm.anthropicKey, config.llm.model);
+  }
+  if (config.llm.provider === "openai" && (config.llm.openaiKey || config.llm.openaiBaseUrl)) {
+    return new OpenAICompatProvider(config.llm.openaiKey, config.llm.openaiBaseUrl, config.llm.model);
+  }
+  return null;
+}
+
+export const llm: LLMProvider | null = makeLLM();
 
 export const llmLive = llm !== null;
 

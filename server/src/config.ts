@@ -16,16 +16,34 @@ if (existsSync(envPath)) {
 
 const env = process.env;
 
+// Pick the reasoning provider. Explicit LLM_PROVIDER wins; otherwise Anthropic
+// if its key is set, else an OpenAI-compatible endpoint if a key or base_url is
+// set (OpenAI, OpenRouter, Together, or a local Ollama/vLLM server), else mock.
+type LLMProviderName = "anthropic" | "openai" | "mock";
+const anthropicKey = env.ANTHROPIC_API_KEY ?? "";
+const openaiKey = env.OPENAI_API_KEY ?? "";
+const openaiBaseUrl = env.OPENAI_BASE_URL ?? "https://api.openai.com/v1";
+const hasOpenAI = Boolean(openaiKey || env.OPENAI_BASE_URL);
+const llmProvider: LLMProviderName =
+  (env.LLM_PROVIDER as LLMProviderName | undefined) ??
+  (anthropicKey ? "anthropic" : hasOpenAI ? "openai" : "mock");
+const llmModel =
+  env.GVI_MODEL ??
+  (llmProvider === "openai" ? env.OPENAI_MODEL ?? "gpt-4o-mini" : "claude-opus-5-5");
+
 export const config = {
   port: Number(env.PORT ?? 8787),
 
   llm: {
-    provider: (env.LLM_PROVIDER ?? (env.ANTHROPIC_API_KEY ? "anthropic" : "mock")) as "anthropic" | "mock",
-    apiKey: env.ANTHROPIC_API_KEY ?? "",
-    // Defaults to Opus 5.5; set GVI_MODEL=claude-haiku-5-5 to cut cost sharply
-    // given the high call volume of a continuous agent loop.
-    model: env.GVI_MODEL ?? "claude-opus-5-5",
-    baseUrl: env.ANTHROPIC_BASE_URL ?? "https://api.anthropic.com",
+    provider: llmProvider,
+    // Defaults to Opus 5.5 (Anthropic) or gpt-4o-mini (OpenAI-compatible).
+    // Set GVI_MODEL to override either; for a chatty loop a small/cheap model
+    // (claude-haiku-5-5, gpt-4o-mini, or a local model) is usually plenty.
+    model: llmModel,
+    anthropicKey,
+    anthropicBaseUrl: env.ANTHROPIC_BASE_URL ?? "https://api.anthropic.com",
+    openaiKey,
+    openaiBaseUrl,
   },
 
   search: {
@@ -46,7 +64,7 @@ export const config = {
 
 export function modeLabel() {
   const live = [];
-  if (config.llm.provider === "anthropic") live.push("reasoning");
+  if (config.llm.provider !== "mock") live.push(`reasoning(${config.llm.provider})`);
   if (config.search.provider === "tavily") live.push("search");
   if (config.telegram.enabled) live.push("telegram");
   return live.length ? `live:${live.join("+")}` : "mock";
