@@ -34,7 +34,7 @@ export class GviStore {
   edges: WireEdge[] = []; // cross-links only; structural edges are implied by node.parent
   agents: AgentSnap[] = AGENTS.map((a) => ({ ...a }));
   alerts: AlertSnap[] = [];
-  metrics: Metrics = { tracked: 0, investigating: 0, verified: 0, flagged: 0, alertsToday: 0 };
+  metrics: Metrics = { tracked: 0, investigating: 0, verified: 0, actionable: 0, flagged: 0, alertsToday: 0 };
   mission = "Surface survey";
   startedAt = Date.now();
 
@@ -101,11 +101,21 @@ export class GviStore {
         }
         break;
       }
+      case "node.meta": {
+        const n = this.nodes.get(e.id);
+        if (n) {
+          if (e.value != null) n.value = e.value;
+          if (e.deadline != null) n.deadline = e.deadline;
+          if (e.ecosystem != null) n.ecosystem = e.ecosystem;
+          if (e.sources != null) n.sources = e.sources;
+        }
+        break;
+      }
       case "edge.add":
         this.edges.push(e.edge);
         break;
       case "alert":
-        this.alerts.unshift({ id: e.id, severity: e.severity, text: e.text, at: e.at, agent: e.agent });
+        this.alerts.unshift({ id: e.id, severity: e.severity, text: e.text, at: e.at, agent: e.agent, oppId: e.oppId });
         this.alerts = this.alerts.slice(0, 100);
         break;
       case "agent": {
@@ -114,6 +124,8 @@ export class GviStore {
           if (e.state) a.state = e.state;
           if (e.activity) a.activity = e.activity;
           if (e.bump) a.tasksDone++;
+          if ("focus" in e) a.focus = e.focus;
+          if (e.state === "idle") a.focus = undefined;
         }
         break;
       }
@@ -125,9 +137,10 @@ export class GviStore {
 
   private recount() {
     const opp = [...this.nodes.values()].filter((n) => n.kind === "opportunity");
-    this.metrics.tracked = opp.length;
+    this.metrics.tracked = opp.filter((n) => n.state !== "expired").length;
     this.metrics.investigating = opp.filter((n) => n.state === "investigating").length;
-    this.metrics.verified = opp.filter((n) => n.state === "verified" || n.state === "actionable").length;
+    this.metrics.verified = opp.filter((n) => n.state === "verified").length;
+    this.metrics.actionable = opp.filter((n) => n.state === "actionable").length;
     this.metrics.flagged = opp.filter((n) => n.state === "flagged").length;
   }
 
@@ -147,6 +160,9 @@ export class GviStore {
     this.emit({ t: "node.state", id, state, score }, true);
     this.recount();
   }
+  setNodeMeta(id: string, meta: { value?: number; deadline?: number; ecosystem?: string; sources?: number }) {
+    this.emit({ t: "node.meta", id, ...meta }, true);
+  }
   addEdge(a: string, b: string, active = true) {
     const edge: WireEdge = { id: uid("e"), a, b, active };
     this.emit({ t: "edge.add", edge }, true);
@@ -155,14 +171,14 @@ export class GviStore {
   ping(nodeId: string, color: string) {
     this.emit({ t: "ping", nodeId, color }, false);
   }
-  setAgent(id: AgentId, patch: { state?: AgentSnap["state"]; activity?: string; bump?: boolean }) {
+  setAgent(id: AgentId, patch: { state?: AgentSnap["state"]; activity?: string; bump?: boolean; focus?: string }) {
     this.emit({ t: "agent", id, ...patch }, false);
   }
   setMission(mission: string) {
     this.emit({ t: "mission", mission }, true);
   }
-  pushAlert(severity: AlertSeverity, text: string, agent?: AgentId): AlertSnap {
-    const a: AlertSnap = { id: uid("a"), severity, text, at: Date.now(), agent };
+  pushAlert(severity: AlertSeverity, text: string, agent?: AgentId, oppId?: string): AlertSnap {
+    const a: AlertSnap = { id: uid("a"), severity, text, at: Date.now(), agent, oppId };
     if (severity !== "info") this.metrics.alertsToday++;
     this.emit({ t: "alert", ...a }, true);
     this.onAlert?.(a);
