@@ -13,7 +13,7 @@ user changes the rules; note the change in your session entry.
 - **Target:** free text — whatever the user names in chat; "start" → general sweep
 - **Focus areas:** UX / visual design, architecture, performance, testing
 - **Findings handling:** fix safe issues; flag architectural ones for approval
-- **Push policy:** feature branch → PR → merge; do NOT push to `main` directly, and commit/push only when asked
+- **Push policy:** feature branch → commit → push → PR → merge → delete branch, carried through autonomously once the work is done (don't ask at each gate); never commit to `main` directly
 - **Commit style:** Conventional Commits with scope (e.g. `feat(web):`); `chore(ledger):` for this directory; end commit messages with `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`
 - **Commit granularity:** one logical change per commit
 - **Deliverable:** working, browser-verified change + chat summary; session review in .context_ledger/memory/office/reviews/
