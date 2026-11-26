@@ -29,7 +29,11 @@ export interface WireNode {
   state?: OppState;
   parent?: string;
   score?: number;
-  r: number;
+  // orbit meaning
+  ecosystem?: string; // the wedge (angle) an opportunity belongs to
+  value?: number; // estimated USD value — drives body size
+  deadline?: number; // ms timestamp the opportunity closes — drives radius
+  sources?: number; // evidence count
 }
 
 export interface WireEdge {
@@ -44,6 +48,7 @@ export interface AgentSnap {
   state: AgentState;
   activity: string;
   tasksDone: number;
+  focus?: string; // id of the node it is working on (drives the rim thread)
 }
 
 export interface AlertSnap {
@@ -52,12 +57,14 @@ export interface AlertSnap {
   text: string;
   at: number;
   agent?: AgentId;
+  oppId?: string;
 }
 
 export interface Metrics {
   tracked: number;
   investigating: number;
   verified: number;
+  actionable: number;
   flagged: number;
   alertsToday: number;
 }
@@ -67,10 +74,12 @@ export type WireEvent =
   | { t: "snapshot"; nodes: WireNode[]; edges: WireEdge[]; agents: AgentSnap[]; alerts: AlertSnap[]; metrics: Metrics; mission: string; startedAt: number; mode: string }
   | { t: "node.add"; node: WireNode }
   | { t: "node.state"; id: string; state: OppState; score?: number }
+  | { t: "node.meta"; id: string; value?: number; deadline?: number; ecosystem?: string; sources?: number }
+  | { t: "node.remove"; id: string }
   | { t: "edge.add"; edge: WireEdge }
   | { t: "ping"; nodeId: string; color: string }
-  | { t: "agent"; id: AgentId; state?: AgentState; activity?: string; bump?: boolean }
-  | { t: "alert"; id: string; severity: AlertSeverity; text: string; at: number; agent?: AgentId }
+  | { t: "agent"; id: AgentId; state?: AgentState; activity?: string; bump?: boolean; focus?: string }
+  | { t: "alert"; id: string; severity: AlertSeverity; text: string; at: number; agent?: AgentId; oppId?: string }
   | { t: "mission"; mission: string };
 
 // A research note is the persistent, auditable record of what an agent found,
