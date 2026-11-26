@@ -148,6 +148,8 @@ export function startOrchestrator(store: GviStore) {
       store.setNodeState(target.id, res.verdict);
       store.addNote({ oppId: target.id, agent: "verifier", summary: `${res.verdict}: ${res.reason}`, sources: m?.url ? [m.url] : [] });
       store.pushAlert(res.verdict === "verified" ? "verified" : "flagged", `${target.label} — ${res.reason}`, "verifier", target.id);
+      // a flagged dead-end lingers briefly, then is pruned so it doesn't crust up
+      if (res.verdict === "flagged") timers.push(setTimeout(() => store.removeNode(target.id), 16000));
       store.setAgent("verifier", { bump: true });
       idle("verifier", "Adjudicating claims", 900);
     }, Math.round(t * 1.5))
@@ -213,14 +215,17 @@ export function startOrchestrator(store: GviStore) {
     setInterval(() => {
       const live = [...store.opportunities("verified"), ...store.opportunities("actionable")];
       store.setAgent("monitor", { state: "working", activity: `Watching ${live.length} live opportunities`, focus: live[0]?.id });
-      if (live.length && chance(0.5)) {
+      if (live.length && chance(0.4)) {
         const target = rand(live)!;
-        if (chance(0.55)) {
+        // mostly just warn + pull the deadline in (creates "needs you" moments);
+        // only occasionally let one actually expire, so the field stays alive
+        if (chance(0.82)) {
           store.pushAlert("decaying", `${target.label} closing soon — still unclaimed`, "monitor", target.id);
-          store.setNodeMeta(target.id, { deadline: Date.now() + (2 + Math.random() * 18) * HOUR });
+          store.setNodeMeta(target.id, { deadline: Date.now() + (2 + Math.random() * 10) * HOUR });
         } else {
           store.setNodeState(target.id, "expired");
           store.ping(target.id, "#4a4d40");
+          timers.push(setTimeout(() => store.removeNode(target.id), 2500));
         }
       }
       idle("monitor", "Tracking deadlines", 1100);

@@ -75,6 +75,7 @@ export type WireEvent =
   | { t: "node.add"; node: WireNode }
   | { t: "node.state"; id: string; state: OppState; score?: number }
   | { t: "node.meta"; id: string; value?: number; deadline?: number; ecosystem?: string; sources?: number }
+  | { t: "node.remove"; id: string }
   | { t: "edge.add"; edge: WireEdge }
   | { t: "ping"; nodeId: string; color: string }
   | { t: "agent"; id: AgentId; state?: AgentState; activity?: string; bump?: boolean; focus?: string }

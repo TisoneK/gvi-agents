@@ -21,24 +21,23 @@ function close(deadline?: number): string {
 }
 
 function line(): string | null {
-  // explaining a clicked organism takes priority
+  // explaining a clicked organism takes priority — a direct answer to you
   const sel = store.selected();
   if (sel && sel.kind === "opportunity") {
     const st = sel.state ?? "discovered";
     const advice = st === "actionable" ? " I'd claim it." : st === "flagged" ? " I wouldn't touch it." : "";
     return `${sel.label} — I put this near ${fmtUSD(sel.value)}, ${st}, ${close(sel.deadline)}.${advice}`;
   }
-  // otherwise, the most recent finding — but only while it's fresh (~6s)
+  // otherwise it speaks ONLY when something needs you, and only while fresh.
+  // It never narrates confirmations, flags, stacks or surfaces.
   const a = store.alerts[0];
-  if (a && Date.now() - a.at < 6000) {
+  if (a && Date.now() - a.at < 5000) {
     const n = a.oppId ? store.nodes.find((x) => x.id === a.oppId) : null;
-    const label = n?.label ?? "";
-    if (a.severity === "verified") return label ? `Confirmed ${label}. It holds up.` : a.text;
-    if (a.severity === "flagged") return label ? `${label} doesn't hold up — I flagged it.` : a.text;
-    if (a.severity === "decaying") return label ? `${label} is slipping away, ${close(n?.deadline)}.` : a.text;
-    return a.text; // stacks, new surfaces, coming online
+    if (!n) return null;
+    if (a.severity === "decaying") return `${n.label} is slipping away, ${close(n.deadline)}. I'd grab it.`;
+    if (n.state === "actionable") return `I've got ${n.label} ready — around ${fmtUSD(n.value)}. Worth claiming.`;
   }
-  return null;
+  return null; // silence is resting
 }
 
 export default function Voice() {

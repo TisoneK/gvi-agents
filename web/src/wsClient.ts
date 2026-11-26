@@ -23,6 +23,7 @@ type WireEvent =
   | { t: "node.add"; node: WireNode }
   | { t: "node.state"; id: string; state: OppState; score?: number }
   | { t: "node.meta"; id: string; value?: number; deadline?: number; ecosystem?: string; sources?: number }
+  | { t: "node.remove"; id: string }
   | { t: "edge.add"; edge: WireEdge }
   | { t: "ping"; nodeId: string; color: string }
   | { t: "agent"; id: AgentId; state?: "idle" | "working" | "blocked"; activity?: string; bump?: boolean; focus?: string }
@@ -59,6 +60,9 @@ function applyEvent(e: WireEvent) {
       break;
     case "node.meta":
       store.setNodeMeta(e.id, { value: e.value, deadline: e.deadline, ecosystem: e.ecosystem, sources: e.sources });
+      break;
+    case "node.remove":
+      store.removeNode(e.id);
       break;
     case "edge.add":
       store.addEdge(e.edge.a, e.edge.b, e.edge.active ?? true);

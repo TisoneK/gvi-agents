@@ -54,8 +54,8 @@ function hexA(hex: string, a: number) {
 }
 
 function valueToSize(v: number | undefined): number {
-  if (!v || v <= 0) return 5;
-  return clamp(3.5 + Math.log10(Math.max(v, 100)) * 2.1, 4, 16);
+  if (!v || v <= 0) return 6;
+  return clamp(5 + Math.log10(Math.max(v, 100)) * 2.6, 5.5, 21);
 }
 
 export type PresenceState = "resting" | "hunting" | "waiting";
@@ -64,9 +64,10 @@ export type PresenceState = "resting" | "hunting" | "waiting";
 export function presenceState(): { state: PresenceState; need: GNode | null } {
   const now = Date.now();
   const opps = store.nodes.filter((n) => n.kind === "opportunity" && !n.claimAt && !n.dismissAt && n.state !== "expired");
+  // the presence only truly "needs you" for something closing very soon
   const need =
     opps
-      .filter((n) => (n.state === "actionable" || n.state === "verified") && n.deadline != null && n.deadline - now < 24 * 3600_000)
+      .filter((n) => (n.state === "actionable" || n.state === "verified") && n.deadline != null && n.deadline - now < 8 * 3600_000)
       .sort((a, b) => (a.deadline ?? 0) - (b.deadline ?? 0))[0] ?? null;
   if (need) return { state: "waiting", need };
   if (store.agents.some((a) => a.state === "working")) return { state: "hunting", need: null };
@@ -204,9 +205,9 @@ export default function Presence() {
       const cy = h / 2;
       const now = performance.now();
       const nowMs = Date.now();
-      const maxR = Math.min(w, h) * 0.42;
-      const coreR = 24;
-      const rMin = coreR + 26;
+      const maxR = Math.min(w, h) * 0.47;
+      const coreR = 27;
+      const rMin = coreR + 30;
 
       const { state, need } = presenceState();
       const userActive = now - mouse.current.lastMove < 4000;
@@ -247,6 +248,8 @@ export default function Presence() {
         if (n.state !== "expired" && hoursLeft != null && hoursLeft <= 0 && !n.claimAt) toExpire.push(n.id);
         let tr = timeToRadius(hoursLeft, maxR, rMin);
         tr += Math.sin(now / 2000 + n.wob * 2) * 5; // gentle breathing drift
+        // the decision it needs is pulled in toward the core
+        if (n.id === need?.id) tr = Math.max(rMin * 0.9, tr * 0.6);
 
         if (Number.isNaN(n.a)) {
           n.a = ta;
@@ -375,6 +378,23 @@ export default function Presence() {
       ctx.arc(0, 0, dangerR, 0, Math.PI * 2);
       ctx.fill();
 
+      // faint time rings — the orbit's idea made just visible (24h brightest)
+      const timeRings: [number, number, number[]][] = [
+        [24, 0.11, []],
+        [72, 0.05, [2, 7]],
+        [168, 0.032, [2, 7]],
+      ];
+      for (const [hrs, a, dash] of timeRings) {
+        const rr = timeToRadius(hrs, maxR, rMin);
+        ctx.strokeStyle = hexA(GOLD, a);
+        ctx.lineWidth = 1;
+        ctx.setLineDash(dash);
+        ctx.beginPath();
+        ctx.arc(0, 0, rr, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+
       // attention light — softly lifts whatever it rests on
       const alight = ctx.createRadialGradient(attS.x, attS.y, 0, attS.x, attS.y, 120);
       alight.addColorStop(0, hexA("#ede7d3", state === "resting" ? 0.03 : 0.06));
@@ -405,6 +425,23 @@ export default function Presence() {
         ctx.fill();
       }
 
+      // tether the core to what it needs a call on, and to whatever the queue is
+      // pointing at — so the floating cards and the organisms read as one thing
+      const tether = (t: GNode | null, strong: boolean) => {
+        if (!t || Number.isNaN(t.a) || t.claimAt || t.dismissAt) return;
+        const g3 = ctx.createLinearGradient(core.current.x, core.current.y, t.x, t.y);
+        g3.addColorStop(0, hexA(GOLD, strong ? 0.6 : 0.35));
+        g3.addColorStop(1, hexA(GOLD, strong ? 0.18 : 0.06));
+        ctx.strokeStyle = g3;
+        ctx.lineWidth = strong ? 1.4 : 1;
+        ctx.beginPath();
+        ctx.moveTo(core.current.x, core.current.y);
+        ctx.quadraticCurveTo(core.current.x * 0.3, core.current.y * 0.3, t.x, t.y);
+        ctx.stroke();
+      };
+      tether(need && !Number.isNaN(need.a) ? need : null, true);
+      if (spot && spot.id !== need?.id) tether(spot, false);
+
       // compounding bonds (the only lines between organisms)
       for (const e of store.edges) {
         const a = store.nodes.find((x) => x.id === e.a);
@@ -434,6 +471,20 @@ export default function Presence() {
 
       // ---------- organisms ----------
       const sel = store.selectedId;
+      // label only the few that matter: top by value × urgency, plus whatever
+      // is being touched (selected / hovered / queue-linked / needed)
+      const importantIds = new Set(
+        store.nodes
+          .filter((n) => n.kind === "opportunity" && !n.claimAt && !n.dismissAt && n.state !== "expired" && n.state !== "flagged" && !Number.isNaN(n.a))
+          .map((n) => {
+            const hl = n.deadline != null ? (n.deadline - nowMs) / 3600000 : null;
+            const u = hl == null ? 0.1 : clamp(1 - hl / 72, 0, 1);
+            return { id: n.id, w: (n.value ?? 0) * (0.5 + u) };
+          })
+          .sort((a, b) => b.w - a.w)
+          .slice(0, 3)
+          .map((x) => x.id)
+      );
       for (const n of store.nodes) {
         if (n.kind !== "opportunity" || Number.isNaN(n.a)) continue;
         const stt = n.state ?? "discovered";
@@ -487,12 +538,13 @@ export default function Presence() {
         ctx.stroke();
         ctx.globalAlpha = 1;
 
-        // selection / hover gets a soft name, nothing else labeled
-        const named = n.id === sel || (hovered && hovered.id === n.id) || n.id === store.hoverId;
+        // name the few that matter, and whatever is being touched
+        const touched = n.id === sel || (hovered && hovered.id === n.id) || n.id === store.hoverId || n.id === need?.id;
+        const named = touched || importantIds.has(n.id);
         if (named) {
-          ctx.font = "500 10px 'Space Grotesk', sans-serif";
+          ctx.font = (touched ? "500 " : "500 ") + (touched ? 11 : 10) + "px 'Space Grotesk', sans-serif";
           ctx.textAlign = "center";
-          ctx.fillStyle = hexA("#ede7d3", 0.85);
+          ctx.fillStyle = hexA("#ede7d3", touched ? 0.92 : 0.6);
           ctx.fillText(n.label.length > 26 ? n.label.slice(0, 25) + "…" : n.label, n.x, n.y + r + 13);
         }
       }
@@ -543,8 +595,8 @@ function drawPresence(
     state === "resting"
       ? { speed: 900, amp: 0.05, bright: 0.5, wob: 0.06 }
       : state === "hunting"
-      ? { speed: 360, amp: 0.1, bright: 0.85, wob: 0.12 }
-      : { speed: 520, amp: 0.16, bright: 1, wob: 0.14 }; // waiting — insistent bob
+      ? { speed: 340, amp: 0.1, bright: 0.85, wob: 0.13 } // quick, tight
+      : { speed: 1250, amp: 0.22, bright: 1, wob: 0.12 }; // waiting — slow, wide, leaning
 
   // irregular breath (two periods so it never looks like a loop)
   const breath = 1 + Math.sin(now / cfg.speed) * cfg.amp + Math.sin(now / (cfg.speed * 1.7) + 1.3) * cfg.amp * 0.5;

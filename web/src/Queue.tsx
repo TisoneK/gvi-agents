@@ -72,19 +72,18 @@ export default function Queue() {
     setPos({ x: window.innerWidth - 300, y: window.innerHeight - 150 });
   }, [pos]);
 
-  // the presence pulls a decision toward you — the queue opens itself to peek,
-  // sitting on the side AWAY from the node so it never covers what it's asking about
+  // the queue opens ITSELF only when a decision newly appears (null → need),
+  // never on every follow-up — so at rest the scene is the only thing on screen.
+  // It sits on the side away from the node so it never covers what it's about.
   useEffect(() => {
     const id = need?.id ?? null;
-    if (id && id !== lastNeed.current) {
-      lastNeed.current = id;
+    const prev = lastNeed.current;
+    if (id && !prev) {
       setMode((m) => (m === "expanded" ? m : "peek"));
-      if (need) {
-        const onRight = Math.cos(need.a) > 0;
-        setPos({ x: onRight ? 40 : window.innerWidth - 340, y: Math.max(90, window.innerHeight * 0.32) });
-      }
+      const onRight = Math.cos(need!.a) > 0;
+      setPos({ x: onRight ? 40 : window.innerWidth - 332, y: Math.max(96, window.innerHeight * 0.3) });
     }
-    if (!id) lastNeed.current = null;
+    lastNeed.current = id;
   }, [need?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // drag by the handle
@@ -139,14 +138,19 @@ export default function Queue() {
     );
   }
 
+  const topId = needs[0]?.id; // the single most urgent — the only gold button
+
   const renderItem = (n: GNode, compact = false) => {
     const h = hoursLeft(n);
     const st = n.state ?? "discovered";
     const urgent = st === "flagged" || (h != null && h <= 24);
+    const isTop = n.id === topId;
+    // time-left as a heat color, so urgency has a gradient
+    const ageColor = h == null ? "var(--text-faint)" : h <= 6 ? "var(--alarm)" : h <= 24 ? "var(--gold)" : "var(--steel)";
     return (
       <div
         key={n.id}
-        className={"q-item" + (urgent ? " urgent" : "") + (st === "actionable" ? " ready" : "")}
+        className={"q-item" + (urgent ? " urgent" : "") + (isTop ? " ready" : "")}
         onMouseEnter={() => store.setHover(n.id)}
         onMouseLeave={() => store.setHover(null)}
         onClick={() => store.setSelected(n.id)}
@@ -155,7 +159,7 @@ export default function Queue() {
           <span className="q-stage">
             <span className="q-dot" style={{ background: STATE_COLOR[st] }} /> {STAGE[st]}
           </span>
-          <span className={"q-age" + (h != null && h <= 24 ? " hot" : "")}>{fmtClose(h)}</span>
+          <span className="q-age" style={{ color: ageColor }}>{fmtClose(h)}</span>
         </div>
         <div className="q-title">{n.label}</div>
         {!compact && (
@@ -166,7 +170,7 @@ export default function Queue() {
         <div className="q-actions">
           {(st === "actionable" || st === "verified") && (
             <button
-              className="q-btn primary"
+              className={"q-btn" + (isTop ? " primary" : "")}
               onClick={(e) => {
                 e.stopPropagation();
                 act(n.id, "claim");
@@ -191,13 +195,12 @@ export default function Queue() {
 
   // ---------- peek ----------
   if (mode === "peek") {
-    const top = [...needs, ...watching].slice(0, 3);
+    const top = [...needs, ...watching].slice(0, 2); // only one or two, never a panel
+    const extra = needs.length + watching.length - top.length;
     return (
       <div className="q-float peek" style={style}>
         <div className="q-handle" onMouseDown={startDrag}>
-          <span className="q-handle-title">
-            {need ? "Needs your call" : "On watch"}
-          </span>
+          <span className="q-handle-title">{need ? "Needs your call" : "On watch"}</span>
           <div className="q-handle-btns">
             <button className="q-mini" onClick={() => setMode("expanded")}>⤢</button>
             <button className="q-mini" onClick={() => setMode("collapsed")}>✕</button>
@@ -205,9 +208,9 @@ export default function Queue() {
         </div>
         {top.length === 0 && <div className="q-empty">Nothing yet — still surveying.</div>}
         {top.map((n) => renderItem(n, true))}
-        {needs.length + watching.length > 3 && (
+        {extra > 0 && (
           <button className="q-more" onClick={() => setMode("expanded")}>
-            {needs.length + watching.length - 3} more
+            {extra} more
           </button>
         )}
       </div>

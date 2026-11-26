@@ -111,6 +111,10 @@ export class GviStore {
         }
         break;
       }
+      case "node.remove":
+        this.nodes.delete(e.id);
+        this.edges = this.edges.filter((x) => x.a !== e.id && x.b !== e.id);
+        break;
       case "edge.add":
         this.edges.push(e.edge);
         break;
@@ -162,6 +166,11 @@ export class GviStore {
   }
   setNodeMeta(id: string, meta: { value?: number; deadline?: number; ecosystem?: string; sources?: number }) {
     this.emit({ t: "node.meta", id, ...meta }, true);
+  }
+  removeNode(id: string) {
+    if (!this.nodes.has(id)) return;
+    this.emit({ t: "node.remove", id }, true);
+    this.recount();
   }
   addEdge(a: string, b: string, active = true) {
     const edge: WireEdge = { id: uid("e"), a, b, active };
