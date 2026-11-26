@@ -32,7 +32,10 @@ const llmModel =
   (llmProvider === "openai" ? env.OPENAI_MODEL ?? "gpt-4o-mini" : "claude-opus-5-5");
 
 export const config = {
-  port: Number(env.PORT ?? 8787),
+  // Some shells export PORT (often as "0" for "pick a free port"), which would
+  // move the backend off the port web/src/wsClient.ts hardcodes. Treat an
+  // empty/zero/unparseable value as "unset".
+  port: Number(env.PORT ?? 8787) || 8787,
 
   llm: {
     provider: llmProvider,
