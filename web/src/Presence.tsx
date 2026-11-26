@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { store } from "./store";
-import type { AgentId, GNode } from "./types";
+import type { GNode } from "./types";
 
 // ──────────────────────────────────────────────────────────────────────────
 // THE PRESENCE — not a screen you read, a thing you watch.
@@ -17,7 +17,6 @@ import type { AgentId, GNode } from "./types";
 
 const GOLD = "#f0b545";
 
-const AGENT_ORDER: AgentId[] = ["hunter", "researcher", "verifier", "evaluator", "strategist", "monitor"];
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
