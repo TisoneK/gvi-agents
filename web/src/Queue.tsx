@@ -62,14 +62,17 @@ export default function Queue() {
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   const drag = useRef<{ dx: number; dy: number } | null>(null);
   const lastNeed = useRef<string | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const { needs, watching } = queueItems();
   const { need } = presenceState();
 
-  // place the object out of the way initially (bottom-right)
+  // place the object out of the way initially (bottom-right), measured against
+  // the chip that actually renders so it hugs the corner on any width
   useEffect(() => {
     if (pos) return;
-    setPos({ x: window.innerWidth - 300, y: window.innerHeight - 150 });
+    const w = Math.min(130, window.innerWidth - 20);
+    setPos({ x: window.innerWidth - w - 16, y: window.innerHeight - 150 });
   }, [pos]);
 
   // the queue opens ITSELF only when a decision newly appears (null → need),
@@ -81,7 +84,8 @@ export default function Queue() {
     if (id && !prev) {
       setMode((m) => (m === "expanded" ? m : "peek"));
       const onRight = Math.cos(need!.a) > 0;
-      setPos({ x: onRight ? 40 : window.innerWidth - 332, y: Math.max(96, window.innerHeight * 0.3) });
+      const w = Math.min(300, window.innerWidth - 20);
+      setPos({ x: onRight ? 20 : window.innerWidth - w - 12, y: Math.max(96, window.innerHeight * 0.3) });
     }
     lastNeed.current = id;
   }, [need?.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -90,7 +94,7 @@ export default function Queue() {
   useEffect(() => {
     const move = (e: MouseEvent) => {
       if (!drag.current) return;
-      setPos({ x: clamp(e.clientX - drag.current.dx, 8, window.innerWidth - 60), y: clamp(e.clientY - drag.current.dy, 8, window.innerHeight - 40) });
+      setPos(fitPos(panelRef.current, e.clientX - drag.current.dx, e.clientY - drag.current.dy));
     };
     const up = () => (drag.current = null);
     window.addEventListener("mousemove", move);
@@ -104,6 +108,15 @@ export default function Queue() {
     if (!pos) return;
     drag.current = { dx: e.clientX - pos.x, dy: e.clientY - pos.y };
   };
+
+  // opening a bigger sheet, filtering, or the window changing size can all push
+  // the panel past an edge — re-fit it against its measured size afterwards
+  useEffect(() => {
+    const fit = () => setPos((p) => (p ? fitPos(panelRef.current, p.x, p.y) : p));
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, [mode, filter]);
 
   const act = (id: string, kind: "claim" | "dismiss") => {
     kind === "claim" ? store.claim(id) : store.dismiss(id);
@@ -122,7 +135,7 @@ export default function Queue() {
   // ---------- collapsed ----------
   if (mode === "collapsed") {
     return (
-      <div className="q-float collapsed" style={style} onMouseDown={startDrag} onClick={() => setMode(urgentCount ? "peek" : "expanded")}>
+      <div ref={panelRef} className="q-float collapsed" style={style} onMouseDown={startDrag} onClick={() => setMode(urgentCount ? "peek" : "expanded")}>
         <span
           className={"q-pulse" + (urgentCount ? " live" : "")}
           style={{ animationDuration: `${pulseDur}s` }}
@@ -198,7 +211,7 @@ export default function Queue() {
     const top = [...needs, ...watching].slice(0, 2); // only one or two, never a panel
     const extra = needs.length + watching.length - top.length;
     return (
-      <div className="q-float peek" style={style}>
+      <div ref={panelRef} className="q-float peek" style={style}>
         <div className="q-handle" onMouseDown={startDrag}>
           <span className="q-handle-title">{need ? "Needs your call" : "On watch"}</span>
           <div className="q-handle-btns">
@@ -230,7 +243,7 @@ export default function Queue() {
   return (
     <>
       <div className="q-backdrop" onClick={() => setMode("collapsed")} />
-      <div className="q-float expanded" style={style}>
+      <div ref={panelRef} className="q-float expanded" style={style}>
         <div className="q-handle" onMouseDown={startDrag}>
           <span className="q-handle-title">Action queue</span>
           <div className="q-handle-btns">
@@ -259,4 +272,15 @@ export default function Queue() {
 
 function clamp(v: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, v));
+}
+
+// Keep the queue fully inside the viewport, using the panel's real size when it
+// is mounted (a hardcoded width left the sheet hanging off narrow screens).
+function fitPos(el: HTMLElement | null, x: number, y: number) {
+  const w = el?.offsetWidth ?? Math.min(300, window.innerWidth - 20);
+  const h = el?.offsetHeight ?? 120;
+  return {
+    x: clamp(x, 8, Math.max(8, window.innerWidth - w - 8)),
+    y: clamp(y, 8, Math.max(8, window.innerHeight - h - 8)),
+  };
 }

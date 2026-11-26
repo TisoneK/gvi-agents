@@ -229,10 +229,10 @@ body {
   }
 }
 .q-float.peek {
-  width: 300px;
+  width: min(300px, calc(100vw - 20px));
 }
 .q-float.expanded {
-  width: 340px;
+  width: min(340px, calc(100vw - 20px));
   max-height: 72vh;
   display: flex;
   flex-direction: column;
@@ -426,6 +426,61 @@ body {
   font-size: 12px;
   color: var(--text-faint);
   line-height: 1.5;
+}
+
+/* ---------- small screens ---------- */
+/* The scene already scales itself (its radii derive from the viewport); these
+   rules only keep the fixed overlays — wordmark, stakes, queue, leash — from
+   colliding or spilling off a phone-sized viewport. */
+@media (max-width: 640px) {
+  .top-scrim {
+    height: 92px;
+  }
+  .wordmark {
+    top: 14px;
+    left: 16px;
+  }
+  /* stack the stakes under the wordmark instead of sharing one row with it */
+  .ledger {
+    top: 36px;
+    left: 16px;
+    right: auto;
+    max-width: calc(100vw - 32px);
+    flex-wrap: wrap;
+    font-size: 12px;
+    gap: 7px;
+  }
+  /* lift the voice clear of the leash so a two-line line never sits under it */
+  .voice {
+    bottom: 64px;
+    max-width: 92vw;
+  }
+  .voice-line {
+    font-size: 13px;
+  }
+  /* the leash spans the width, so its steps stay comfortable tap targets */
+  .autonomy {
+    left: 12px;
+    right: 12px;
+    bottom: 14px;
+    gap: 8px;
+  }
+  .autonomy-track {
+    flex: 1;
+  }
+  .autonomy-step {
+    flex: 1;
+    padding: 8px 4px;
+    font-size: 10px;
+  }
+  .q-mini {
+    width: 30px;
+    height: 30px;
+    font-size: 14px;
+  }
+  .q-float.expanded {
+    max-height: 68vh;
+  }
 }
 
 ::-webkit-scrollbar {
